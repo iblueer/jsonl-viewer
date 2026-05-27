@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jsonl-viewer-v1';
+const CACHE_NAME = 'jsonl-viewer-v2';
 const APP_SHELL = [
   './',
   './index.html',

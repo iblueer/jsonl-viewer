@@ -279,6 +279,14 @@
     resize: none;
     outline: none;
     tab-size: 2;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .input-area.no-wrap {
+    white-space: pre;
+    overflow-wrap: normal;
+    overflow-x: auto;
   }
 
   .input-area::placeholder { color: var(--text-dim); }
@@ -309,6 +317,12 @@
   }
 
   /* Filter bar */
+  .filter-toggle-btn.active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: rgba(0, 120, 212, 0.08);
+  }
+
   .filter-bar {
     padding: 4px 8px;
     border-bottom: 1px solid var(--border);
@@ -317,6 +331,14 @@
     align-items: center;
     flex-shrink: 0;
     background: var(--surface);
+  }
+
+  .filter-bar.hidden { display: none; }
+
+  .filter-label {
+    color: var(--text-muted);
+    font-size: 12px;
+    white-space: nowrap;
   }
 
   .filter-input {
@@ -335,6 +357,13 @@
 
   .filter-input:focus { border-color: var(--accent); }
   .filter-input::placeholder { color: var(--text-dim); }
+
+  .filter-close {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    justify-content: center;
+  }
 
   /* JSON syntax — VS Code Light theme */
   .json-key { color: #0451A5; }
@@ -560,6 +589,13 @@
           input.jsonl
         </div>
         <div class="panel-tools">
+          <div class="toggle-group" title="Toggle soft word wrap in the input editor (Option+Z)">
+            <span>Word wrap</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="inputWordWrap" checked onchange="toggleInputWrap()">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
           <label class="btn" title="Upload .jsonl file">
             <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
             Upload
@@ -598,14 +634,34 @@ Or drag & drop a .jsonl file" spellcheck="false" oninput="debounceProcess()"></t
               <span class="toggle-slider"></span>
             </label>
           </div>
+          <button class="btn filter-toggle-btn" id="rowFilterToggle" onclick="toggleFilterPanel('rowFilterBar', 'filterInput')" title="Filter JSONL rows">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            Rows
+          </button>
+          <button class="btn filter-toggle-btn" id="fieldFilterToggle" onclick="toggleFilterPanel('fieldFilterBar', 'fieldFilterInput')" title="Show selected fields only">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/><path d="M8 6v12"/></svg>
+            Fields
+          </button>
           <button class="btn expand-btn" id="expandCollapseBtn" onclick="toggleExpandAll()">
             <span id="expandLabel">Expand All</span>
           </button>
         </div>
       </div>
-      <div class="filter-bar">
+      <div class="filter-bar hidden" id="rowFilterBar">
         <svg width="12" height="12" fill="none" stroke="var(--text-dim)" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-        <input class="filter-input" id="filterInput" placeholder="Filter rows..." oninput="debounceProcess()">
+        <span class="filter-label">Filter rows</span>
+        <input class="filter-input" id="filterInput" placeholder="Text or key:value" oninput="debounceProcess()">
+        <button class="btn filter-close" onclick="closeFilterPanel('rowFilterBar', 'filterInput')" title="Clear and close row filter">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="filter-bar hidden" id="fieldFilterBar">
+        <svg width="12" height="12" fill="none" stroke="var(--text-dim)" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/><path d="M8 6v12"/></svg>
+        <span class="filter-label">Filter fields</span>
+        <input class="filter-input" id="fieldFilterInput" placeholder="response, id, meta.cost" oninput="debounceProcess()">
+        <button class="btn filter-close" onclick="closeFilterPanel('fieldFilterBar', 'fieldFilterInput')" title="Clear and close field filter">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
       </div>
       <div class="panel-body" id="outputBody">
         <div class="empty-state" id="emptyState">
@@ -650,9 +706,85 @@ Or drag & drop a .jsonl file" spellcheck="false" oninput="debounceProcess()"></t
     return document.getElementById('renderNewlines').checked;
   }
 
+  function toggleInputWrap() {
+    const input = document.getElementById('inputArea');
+    const enabled = document.getElementById('inputWordWrap').checked;
+    input.classList.toggle('no-wrap', !enabled);
+    input.setAttribute('wrap', enabled ? 'soft' : 'off');
+  }
+
+  function getFilterToggleId(panelId) {
+    return panelId === 'rowFilterBar' ? 'rowFilterToggle' : 'fieldFilterToggle';
+  }
+
+  function syncFilterToggle(panelId) {
+    const panel = document.getElementById(panelId);
+    const toggle = document.getElementById(getFilterToggleId(panelId));
+    if (panel && toggle) toggle.classList.toggle('active', !panel.classList.contains('hidden'));
+  }
+
+  function toggleFilterPanel(panelId, inputId) {
+    const panel = document.getElementById(panelId);
+    const input = document.getElementById(inputId);
+    panel.classList.toggle('hidden');
+    syncFilterToggle(panelId);
+    if (!panel.classList.contains('hidden')) input.focus();
+  }
+
+  function closeFilterPanel(panelId, inputId) {
+    const panel = document.getElementById(panelId);
+    const input = document.getElementById(inputId);
+    input.value = '';
+    panel.classList.add('hidden');
+    syncFilterToggle(panelId);
+    processInput();
+  }
+
+  function parseFieldPaths(input) {
+    return input.split(',')
+      .map(path => path.trim().split('.').map(part => part.trim()).filter(Boolean))
+      .filter(path => path.length > 0);
+  }
+
+  function getPathValue(obj, path) {
+    let current = obj;
+    for (const part of path) {
+      if (current === null || typeof current !== 'object' || !Object.prototype.hasOwnProperty.call(current, part)) {
+        return { found: false };
+      }
+      current = current[part];
+    }
+    return { found: true, value: current };
+  }
+
+  function setPathValue(target, path, value) {
+    let current = target;
+    path.forEach((part, index) => {
+      if (index === path.length - 1) {
+        current[part] = value;
+        return;
+      }
+      if (!current[part] || typeof current[part] !== 'object' || Array.isArray(current[part])) {
+        current[part] = {};
+      }
+      current = current[part];
+    });
+  }
+
+  function projectFields(data, fieldPaths) {
+    if (fieldPaths.length === 0) return data;
+    const projected = {};
+    fieldPaths.forEach(path => {
+      const result = getPathValue(data, path);
+      if (result.found) setPathValue(projected, path, result.value);
+    });
+    return projected;
+  }
+
   function processInput() {
     const raw = document.getElementById('inputArea').value.trim();
     const filter = document.getElementById('filterInput').value.trim().toLowerCase();
+    const fieldPaths = parseFieldPaths(document.getElementById('fieldFilterInput').value);
 
     if (!raw) {
       parsedData = [];
@@ -690,14 +822,20 @@ Or drag & drop a .jsonl file" spellcheck="false" oninput="debounceProcess()"></t
       });
     }
 
+    const displayData = fieldPaths.length > 0
+      ? filtered.map(row => row.error ? row : { ...row, data: projectFields(row.data, fieldPaths) })
+      : filtered;
+
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('treeView').style.display = 'block';
 
     const statusText = errorCount > 0 ? `${lines.length} lines · ${errorCount} error${errorCount > 1 ? 's' : ''}` : `${lines.length} lines · Valid`;
     document.getElementById('statusInfo').textContent = statusText;
-    document.getElementById('rowCount').textContent = `${filtered.length} row${filtered.length !== 1 ? 's' : ''}${filter ? ' filtered' : ''}`;
+    const rowCountParts = [`${filtered.length} row${filtered.length !== 1 ? 's' : ''}${filter ? ' filtered' : ''}`];
+    if (fieldPaths.length > 0) rowCountParts.push('fields selected');
+    document.getElementById('rowCount').textContent = rowCountParts.join(' · ');
 
-    renderTreeView(filtered);
+    renderTreeView(displayData);
   }
 
   function tryParseJson(str) {
@@ -880,7 +1018,15 @@ Or drag & drop a .jsonl file" spellcheck="false" oninput="debounceProcess()"></t
 
   document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') processInput();
+    if (e.altKey && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      const toggle = document.getElementById('inputWordWrap');
+      toggle.checked = !toggle.checked;
+      toggleInputWrap();
+    }
   });
+
+  toggleInputWrap();
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
